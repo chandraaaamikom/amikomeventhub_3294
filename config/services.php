@@ -35,4 +35,24 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Google OAuth (Soal 1a — Login Instan via Sosial Media)
+    |--------------------------------------------------------------------------
+    |
+    | Dipakai oleh Laravel Socialite. Nama kunci 'google' wajib persis seperti
+    | ini karena Socialite mencarinya berdasarkan nama driver.
+    |
+    | GOOGLE_REDIRECT_URI harus sama persis dengan Authorized redirect URI
+    | yang didaftarkan di Google Cloud Console — termasuk http/https, host,
+    | dan port. 127.0.0.1 dan localhost dianggap dua host berbeda oleh Google.
+    |
+    */
+
+    'google' => [
+        'client_id'     => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect'      => env('GOOGLE_REDIRECT_URI'),
+    ],
+
 ];

@@ -7,21 +7,28 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Gerbang Superadmin (pengawas ekosistem global).
+ * Alias tetap 'admin' agar routes/web.php yang lama tidak perlu diubah total.
+ */
 class AdminMiddleware
 {
-    /**
-     * Handle an incoming request.
-     *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
-     */
     public function handle(Request $request, Closure $next): Response
     {
-        // 1. Cek apakah user sudah login, dan apakah role-nya adalah 'admin'
-        if (Auth::check() && Auth::user()->role === 'admin') {
-            return $next($request); // Jika benar admin, izinkan akses ke halaman berikutnya
+        if (Auth::check() && Auth::user()->isSuperadmin()) {
+            return $next($request);
         }
 
-        // 2. Jika bukan admin, tendang/redirect kembali ke halaman login dengan pesan error
-        return redirect()->route('admin.login')->with('error', 'Anda tidak memiliki hak akses untuk masuk ke halaman Administrator.');
+        // Panitia yang nyasar ke /admin diarahkan ke dashboard-nya sendiri,
+        // bukan dilempar ke form login (mereka sudah login).
+        if (Auth::check() && Auth::user()->isOrganizer()) {
+            return redirect()->route('organizer.dashboard')
+                ->with('error', 'Halaman tersebut khusus Superadmin.');
+        }
+
+        Auth::guard('web')->logout();
+
+        return redirect()->route('admin.login')
+            ->with('error', 'Anda tidak memiliki hak akses untuk masuk ke halaman Superadmin.');
     }
 }

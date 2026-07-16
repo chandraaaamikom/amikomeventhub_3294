@@ -14,7 +14,8 @@ return Application::configure(basePath: dirname(__DIR__))
         
         // DAFTARKAN ALIAS ADMIN MIDDLEWARE DI SINI (Sesuai Modul Pertemuan 8)
         $middleware->alias([
-            'admin' => \App\Http\Middleware\AdminMiddleware::class,
+            'admin'     => \App\Http\Middleware\AdminMiddleware::class,
+            'organizer' => \App\Http\Middleware\OrganizerMiddleware::class,
         ]);
 
         // PERBAIKAN MODUL 12: Mengecualikan route webhook Midtrans dari blokir CSRF

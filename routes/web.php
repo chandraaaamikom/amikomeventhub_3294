@@ -9,6 +9,7 @@ use App\Http\Controllers\CartController;
 use App\Http\Controllers\CartCheckoutController;
 use App\Http\Controllers\UserAuthController;
 use App\Http\Controllers\UserDashboardController;
+use App\Http\Controllers\Auth\SocialiteController;
 
 // Import Controllers Admin
 use App\Http\Controllers\Admin\AuthController; // Tambahkan ini untuk Auth Pertemuan 8
@@ -62,6 +63,9 @@ Route::post('/user/login', [UserAuthController::class, 'login'])->name('user.log
 Route::post('/user/logout', [UserAuthController::class, 'logout'])->name('user.logout');
 Route::get('/user/dashboard', [UserDashboardController::class, 'index'])->name('user.dashboard')->middleware('auth');
 
+// SSO Google (Soal 1a)
+Route::get('/auth/google', [SocialiteController::class, 'redirect'])->name('auth.google');
+Route::get('/auth/google/callback', [SocialiteController::class, 'callback'])->name('auth.google.callback');
 
 Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
     
@@ -97,6 +101,16 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
     });
 });
 
+// ---------------------------------------------------------
+// PANEL PANITIA (Soal 1c) — dashboard asli menyusul
+// ---------------------------------------------------------
+Route::middleware(['auth', 'organizer'])->prefix('organizer')->as('organizer.')->group(function () {
+    Route::get('/dashboard', function () {
+        $organization = request()->attributes->get('organization');
+
+        return 'Panel Panitia: ' . $organization->name . ' — sedang dibangun.';
+    })->name('dashboard');
+});
 
 Route::get('/kontak', function () { return view('contact'); });
 Route::get('/profil', function () { return view('profil'); });
