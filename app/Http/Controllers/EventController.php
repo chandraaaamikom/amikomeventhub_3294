@@ -13,8 +13,16 @@ class EventController extends Controller
 {
     public function show($id)
     {
-        $event = Event::with('category')->findOrFail($id);
-        return view('event-detail', compact('event'));
+        $event = Event::with(['category', 'organization'])->findOrFail($id);
+
+        $reviews = $event->reviews()
+            ->with('user:id,name,avatar')
+            ->latest()
+            ->get();
+
+        $ratingAverage = round((float) $reviews->avg('rating'), 2);
+
+        return view('event-detail', compact('event', 'reviews', 'ratingAverage'));
     }
 
     // WAJIB ADA: Untuk menampilkan halaman checkout
