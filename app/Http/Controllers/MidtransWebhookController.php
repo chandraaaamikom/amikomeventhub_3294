@@ -2,85 +2,93 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\Transaction;
+use App\Services\TicketingService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
+/**
+ * Satu-satunya pintu notifikasi pembayaran Midtrans.
+ * Dikecualikan dari CSRF di bootstrap/app.php.
+ */
 class MidtransWebhookController extends Controller
 {
-    /**
-     * Menangani data notifikasi (webhook) otomatis dari Midtrans Snap
-     * Sesuai dengan rute yang kamu gunakan (method: handle)
-     */
+    public function __construct(protected TicketingService $ticketing)
+    {
+    }
+
     public function handle(Request $request)
     {
-        // Ambil payload mentah dari Midtrans
-        $payload = $request->getContent();
-        $notification = json_decode($payload);
+        $notification = json_decode($request->getContent());
 
-        if (!$notification) {
+        if (! $notification || blank($notification->order_id ?? null)) {
             return response()->json(['message' => 'Invalid payload'], 400);
         }
 
-        // VALIDASI SIGNATURE KEY (Sesuai instruksi dasar teori Modul 12)
-        // Jika saat demo offline/localhost terjadi kendala ketidakcocokan server key, 
-        // baris pengecekan 'if' di bawah ini bisa kamu beri tanda komentar (//) untuk bypass.
-        $validSignatureKey = hash("sha512", $notification->order_id . $notification->status_code . $notification->gross_amount . env('MIDTRANS_SERVER_KEY'));
+        // Signature WAJIB diverifikasi. Endpoint ini publik: tanpa verifikasi,
+        // siapa pun bisa menandai transaksi lunas tanpa membayar.
+        if (! $this->signatureIsValid($notification)) {
+            Log::warning('Midtrans webhook: signature tidak valid', [
+                'order_id' => $notification->order_id,
+                'ip'       => $request->ip(),
+            ]);
 
-        if ($notification->signature_key !== $validSignatureKey) {
             return response()->json(['message' => 'Invalid signature'], 403);
         }
 
-        // Cari data transaksi berdasarkan Order ID dari Midtrans
-        $transaction = Transaction::where('order_id', $notification->order_id)->first();
+        $transaction = Transaction::with('transactionItems')
+            ->where('order_id', $notification->order_id)
+            ->first();
 
-        if (!$transaction) {
+        if (! $transaction) {
             return response()->json(['message' => 'Transaction not found'], 404);
         }
 
-        $transactionStatus = $notification->transaction_status;
-        $type = $notification->payment_type;
-        $fraudStatus = $notification->fraud_status ?? null;
+        $status = $notification->transaction_status ?? null;
+        $fraud  = $notification->fraud_status ?? null;
 
-        // KONDISIONAL STATUS: Disesuaikan dengan pilihan ENUM database kamu ('success', 'pending', 'failed')
-        if ($transactionStatus == 'capture') {
-            if ($type == 'credit_card') {
-                if ($fraudStatus == 'challenge') {
-                    $transaction->status = 'pending';
-                } else {
-                    $transaction->status = 'success';
-                    $this->processSuccess($transaction);
-                }
-            } else {
-                $transaction->status = 'success';
-                $this->processSuccess($transaction);
-            }
-        } else if ($transactionStatus == 'settlement') {
-            
-            $transaction->status = 'success';
-            $this->processSuccess($transaction);
+        Log::info("Midtrans webhook: {$transaction->order_id} → {$status}");
 
-        } else if ($transactionStatus == 'pending') {
-            
-            $transaction->status = 'pending';
+        match (true) {
+            // Kartu kredit yang ditahan sistem anti-fraud: belum boleh diluluskan.
+            $status === 'capture' && $fraud === 'challenge' => $this->markPending($transaction),
 
-        } else if ($transactionStatus == 'deny' || $transactionStatus == 'expire' || $transactionStatus == 'cancel') {
-            
-            $transaction->status = 'failed';
-        }
+            $status === 'capture', $status === 'settlement' => $this->ticketing->fulfill($transaction),
 
-        // Simpan perubahan status ke database
-        $transaction->save();
+            $status === 'pending' => $this->markPending($transaction),
 
+            // 'expire' dari Midtrans = pembeli kehabisan waktu.
+            $status === 'expire' => $this->ticketing->release($transaction, Transaction::STATUS_EXPIRED),
+
+            in_array($status, ['deny', 'cancel', 'failure'], true) => $this->ticketing->release($transaction, Transaction::STATUS_FAILED),
+
+            default => Log::warning("Midtrans webhook: status tidak dikenal '{$status}' untuk {$transaction->order_id}"),
+        };
+
+        // Selalu 200 supaya Midtrans berhenti mengirim ulang.
         return response()->json(['message' => 'OK']);
     }
 
-    /**
-     * Fungsi helper untuk memproses pengurangan stok jika sukses lunas
-     */
-    private function processSuccess(Transaction $transaction)
+    protected function signatureIsValid(object $notification): bool
     {
-        if ($transaction->event) {
-            $transaction->event->decrement('stock', $transaction->quantity);
+        $expected = hash(
+            'sha512',
+            $notification->order_id
+                . ($notification->status_code ?? '')
+                . ($notification->gross_amount ?? '')
+                . config('midtrans.server_key')
+        );
+
+        return hash_equals($expected, $notification->signature_key ?? '');
+    }
+
+    protected function markPending(Transaction $transaction): void
+    {
+        // Jangan turunkan status transaksi yang sudah lunas.
+        if ($transaction->stock_applied || $transaction->status === Transaction::STATUS_SUCCESS) {
+            return;
         }
+
+        $transaction->update(['status' => Transaction::STATUS_PENDING]);
     }
 }

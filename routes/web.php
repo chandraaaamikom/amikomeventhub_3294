@@ -7,10 +7,12 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\CartCheckoutController;
+use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\UserAuthController;
 use App\Http\Controllers\UserDashboardController;
 use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\MidtransWebhookController;
 use App\Http\Controllers\Auth\SocialiteController;
 
 // Import Controllers Admin
@@ -44,6 +46,9 @@ Route::get('/event/{id}', [EventController::class, 'show'])->name('events.show')
 // Profil publik penyelenggara (Soal 1b — riwayat review tampil di sini)
 Route::get('/penyelenggara/{organization}', [OrganizationController::class, 'show'])->name('organizations.show');
 
+// ---------------------------------------------------------
+// KERANJANG & CHECKOUT
+// ---------------------------------------------------------
 Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
 Route::post('/cart/{id}/add', [CartController::class, 'add'])->name('cart.add');
 Route::put('/cart/{id}', [CartController::class, 'update'])->name('cart.update');
@@ -54,21 +59,13 @@ Route::post('/cart/checkout', [CartCheckoutController::class, 'process'])->name(
 Route::get('/checkout/{id}', [EventController::class, 'checkout'])->name('checkout');
 Route::post('/checkout/{id}/payment', [EventController::class, 'createPayment'])->name('checkout.process');
 
-// PERBAIKAN: Rute callback dibuat bersih tanpa withoutMiddleware agar tidak memicu error 404
-Route::post('/payment/callback', [EventController::class, 'handlePaymentCallback'])->name('payment.callback');
-
-// Offline QRIS payment (custom QR image flow)
-Route::post('/checkout/{id}/offline', [EventController::class, 'createOfflinePayment'])->name('checkout.offline');
-Route::post('/checkout/confirm-offline', [EventController::class, 'confirmOfflinePayment'])->name('checkout.offline.confirm');
 Route::get('/my-ticket/{order_id?}', [EventController::class, 'ticket'])->name('ticket');
-Route::get('/payment/{order_id}', 
-    [\App\Http\Controllers\CheckoutController::class, 'payment'])
-    ->name('checkout.payment');
+Route::get('/payment/{order_id}', [CheckoutController::class, 'payment'])->name('checkout.payment');
+Route::get('/success/{order_id}', [CheckoutController::class, 'success'])->name('checkout.success');
 
-Route::get('/success/{order_id}', 
-    [\App\Http\Controllers\CheckoutController::class, 'success'])
-    ->name('checkout.success');
-
+// ---------------------------------------------------------
+// AUTENTIKASI PENGGUNA
+// ---------------------------------------------------------
 Route::get('/user/login', [UserAuthController::class, 'showLogin'])->name('user.login');
 Route::post('/user/login', [UserAuthController::class, 'login'])->name('user.login.post');
 Route::post('/user/logout', [UserAuthController::class, 'logout'])->name('user.logout');
@@ -78,11 +75,18 @@ Route::get('/user/dashboard', [UserDashboardController::class, 'index'])->name('
 Route::get('/auth/google', [SocialiteController::class, 'redirect'])->name('auth.google');
 Route::get('/auth/google/callback', [SocialiteController::class, 'callback'])->name('auth.google.callback');
 
+// Rating & Review (Soal 1b)
+Route::middleware('auth')->group(function () {
+    Route::post('/event/{event}/review', [ReviewController::class, 'store'])->name('reviews.store');
+    Route::put('/review/{review}', [ReviewController::class, 'update'])->name('reviews.update');
+    Route::delete('/review/{review}', [ReviewController::class, 'destroy'])->name('reviews.destroy');
+});
+
 // ---------------------------------------------------------
 // PANEL SUPERADMIN
 // ---------------------------------------------------------
 Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
-    
+
     // 1. Rute Autentikasi (Bisa diakses tanpa login)
     // Urutan diperbaiki: login POST dipindah ke atas resouce/middleware agar tidak bentrok
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
@@ -91,7 +95,7 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
 
     // 2. Rute Terproteksi (Wajib Login & Harus Superadmin)
     Route::middleware(['auth', 'admin'])->group(function () {
-        
+
         // Dashboard & Laporan Transaksi
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
         Route::get('/transactions', [DashboardController::class, 'transactions'])->name('transactions.index');
@@ -99,17 +103,17 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
         // Kelola QRIS
         Route::get('/qris', [QrisController::class, 'index'])->name('qris.index');
         Route::post('/qris', [QrisController::class, 'update'])->name('qris.update');
-        
+
         // Kelola Event
         Route::get('/events', [AdminEventController::class, 'index'])->name('events.index');
         Route::resource('events', AdminEventController::class)->except(['index']);
-        
+
         // Kelola Kategori
         Route::resource('categories', CategoryController::class);
-        
+
         // MODUL PARTNER (Tugas UTS Soal 2 & 3)
         Route::resource('partners', PartnerController::class);
-        
+
     });
 });
 
@@ -129,12 +133,8 @@ Route::middleware(['auth', 'organizer'])->prefix('organizer')->as('organizer.')-
     Route::get('/transactions', [OrganizerTransactionController::class, 'index'])->name('transactions.index');
 });
 
-//callback midtrans
-Route::post('/midtrans/callback', [\App\Http\Controllers\MidtransWebhookController::class, 'handle']);
-
-// Rating & Review (Soal 1b)
-Route::middleware('auth')->group(function () {
-    Route::post('/event/{event}/review', [ReviewController::class, 'store'])->name('reviews.store');
-    Route::put('/review/{review}', [ReviewController::class, 'update'])->name('reviews.update');
-    Route::delete('/review/{review}', [ReviewController::class, 'destroy'])->name('reviews.destroy');
-});
+// ---------------------------------------------------------
+// WEBHOOK MIDTRANS — satu-satunya pintu notifikasi pembayaran.
+// Dikecualikan dari CSRF di bootstrap/app.php.
+// ---------------------------------------------------------
+Route::post('/midtrans/callback', [MidtransWebhookController::class, 'handle'])->name('midtrans.callback');
