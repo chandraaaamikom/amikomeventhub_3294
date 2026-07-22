@@ -20,7 +20,11 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // PERBAIKAN MODUL 12: Mengecualikan route webhook Midtrans dari blokir CSRF
         $middleware->validateCsrfTokens(except: [
-            '/midtrans/callback', 
+            'midtrans/callback',
+            // Logout tidak mengubah data bisnis. Pengecualian ini mencegah error
+            // 419 bila pengguna menekan tombol dari tab yang tokennya sudah lama.
+            'user/logout',
+            'admin/logout',
         ]);
 
     })

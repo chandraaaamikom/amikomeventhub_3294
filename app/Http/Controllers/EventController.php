@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Midtrans\Config as MidtransConfig;
 use Midtrans\Snap;
+use Midtrans\Transaction as MidtransTransaction;
 use RuntimeException;
 
 class EventController extends Controller
@@ -99,6 +100,51 @@ class EventController extends Controller
             'snap_token' => $snapToken,
             'order_id'   => $transaction->order_id,
             'expires_at' => $transaction->expires_at->toIso8601String(),
+        ]);
+    }
+
+    /**
+     * Sinkronkan hasil pembayaran dari API Midtrans.
+     *
+     * Webhook tetap menjadi sumber utama pada server publik. Endpoint ini adalah
+     * fallback aman untuk localhost: Midtrans tidak dapat mengirim callback ke
+     * alamat 127.0.0.1, sehingga browser meminta server memverifikasi hasilnya
+     * langsung ke Midtrans setelah Snap mengembalikan status sukses.
+     */
+    public function syncPayment(string $orderId)
+    {
+        $transaction = Transaction::where('order_id', $orderId)->firstOrFail();
+
+        try {
+            $midtransStatus = MidtransTransaction::status($transaction->order_id);
+        } catch (\Throwable $e) {
+            Log::error("Midtrans status sync gagal untuk {$transaction->order_id}: {$e->getMessage()}");
+
+            return response()->json([
+                'success' => false,
+                'status' => $transaction->status,
+                'message' => 'Status pembayaran belum dapat diverifikasi. Silakan muat ulang tiket beberapa saat lagi.',
+            ], 502);
+        }
+
+        $status = $midtransStatus->transaction_status ?? null;
+        $fraudStatus = $midtransStatus->fraud_status ?? 'accept';
+        $grossAmount = (int) ($midtransStatus->gross_amount ?? 0);
+
+        if ($grossAmount !== (int) $transaction->total_price) {
+            Log::warning("Midtrans status sync: nominal tidak cocok untuk {$transaction->order_id}");
+
+            return response()->json(['success' => false, 'message' => 'Nominal pembayaran tidak cocok.'], 422);
+        }
+
+        if ($status === 'settlement' || ($status === 'capture' && $fraudStatus === 'accept')) {
+            $this->ticketing->fulfill($transaction);
+            $transaction->refresh();
+        }
+
+        return response()->json([
+            'success' => $transaction->status === Transaction::STATUS_SUCCESS,
+            'status' => $transaction->status,
         ]);
     }
 

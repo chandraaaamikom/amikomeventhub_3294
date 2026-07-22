@@ -55,6 +55,9 @@
         </form>
 
         <p class="mt-6 text-center text-sm text-slate-500">
+            Belum punya akun? <a href="{{ route('user.register') }}" class="font-semibold text-indigo-600 hover:underline">Daftar dengan email</a>
+        </p>
+        <p class="mt-3 text-center text-sm text-slate-500">
             <a href="{{ route('home') }}" class="font-semibold text-indigo-600 hover:underline">Kembali ke beranda</a>
         </p>
     </div>

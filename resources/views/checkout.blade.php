@@ -128,8 +128,7 @@
                 
                 snap.pay(snapToken, {
                     onSuccess: function(result) {
-                        alert('Pembayaran berhasil!');
-                        window.location.href = '/my-ticket/' + data.order_id;
+                        synchronizePayment(data.order_id);
                     },
                     onPending: function(result) {
                         alert('Pembayaran sedang diproses/menunggu...');
@@ -181,6 +180,30 @@
 
     function closeMidtransModal() {
         document.getElementById('midtrans-overlay').classList.replace('flex', 'hidden');
+    }
+
+    async function synchronizePayment(orderId) {
+        try {
+            const response = await fetch(`/checkout/${orderId}/sync`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('[name="_token"]').value,
+                    'Accept': 'application/json',
+                },
+            });
+            const data = await response.json();
+
+            if (! response.ok || ! data.success) {
+                alert(data.message || 'Pembayaran sedang diverifikasi. Status tiket akan diperbarui setelah terkonfirmasi.');
+            } else {
+                alert('Pembayaran berhasil! Tiket Anda sudah diterbitkan.');
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Pembayaran sedang diverifikasi. Silakan cek tiket Anda beberapa saat lagi.');
+        }
+
+        window.location.href = '/my-ticket/' + orderId;
     }
 </script>
 @endsection
