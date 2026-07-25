@@ -17,6 +17,10 @@ class Event extends Model
         'date',
         'location',
         'price',
+        'early_bird_price',
+        'early_bird_ends_at',
+        'presale_price',
+        'presale_ends_at',
         'stock',
         'reserved_stock',
         'poster_path',
@@ -25,6 +29,10 @@ class Event extends Model
     protected $casts = [
         'date' => 'datetime',
         'price' => 'integer',
+        'early_bird_price' => 'integer',
+        'early_bird_ends_at' => 'datetime',
+        'presale_price' => 'integer',
+        'presale_ends_at' => 'datetime',
         'stock' => 'integer',
         'reserved_stock' => 'integer',
     ];
@@ -76,6 +84,23 @@ class Event extends Model
     public function isFree(): bool
     {
         return $this->price <= 0;
+    }
+
+    /** Harga yang berlaku saat ini: Early Bird -> Presale -> Regular. */
+    public function currentPrice(): int
+    {
+        if ($this->isFree()) return 0;
+        if ($this->early_bird_price !== null && $this->early_bird_ends_at && now()->lessThanOrEqualTo($this->early_bird_ends_at)) return $this->early_bird_price;
+        if ($this->presale_price !== null && $this->presale_ends_at && now()->lessThanOrEqualTo($this->presale_ends_at)) return $this->presale_price;
+        return $this->price;
+    }
+
+    public function currentPriceLabel(): string
+    {
+        if ($this->isFree()) return 'Gratis';
+        if ($this->early_bird_price !== null && $this->early_bird_ends_at && now()->lessThanOrEqualTo($this->early_bird_ends_at)) return 'Early Bird';
+        if ($this->presale_price !== null && $this->presale_ends_at && now()->lessThanOrEqualTo($this->presale_ends_at)) return 'Presale';
+        return 'Regular';
     }
 
     /**

@@ -155,6 +155,10 @@ class EventController extends Controller
             'date'        => ['required', 'date'],
             'location'    => ['required', 'string', 'max:255'],
             'price'       => ['required', 'integer', 'min:0'],
+            'early_bird_price' => ['nullable', 'integer', 'min:0', 'lte:price'],
+            'early_bird_ends_at' => ['nullable', 'date'],
+            'presale_price' => ['nullable', 'integer', 'min:0', 'lte:price'],
+            'presale_ends_at' => ['nullable', 'date', 'after:early_bird_ends_at'],
             'stock'       => ['required', 'integer', 'min:0'],
             'poster'      => [$required ? 'required' : 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ], [

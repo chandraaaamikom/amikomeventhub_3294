@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CartItem;
 use App\Models\Event;
+use App\Models\Coupon;
 use App\Models\Transaction;
 use App\Services\TicketingService;
 use Illuminate\Http\Request;
@@ -35,7 +36,8 @@ class CartCheckoutController extends Controller
 
         $totalAmount = 0;
         foreach ($items as $item) {
-            $totalAmount += ($item['event']->price * $item['quantity']) + TicketingService::SERVICE_FEE;
+            $totalAmount += ($item['event']->currentPrice() * $item['quantity'])
+                + ($item['event']->isFree() ? 0 : TicketingService::SERVICE_FEE);
         }
 
         $selectedIds = collect($items)->pluck('event.id')->all();
@@ -49,6 +51,7 @@ class CartCheckoutController extends Controller
             'name'  => 'required|string|max:255',
             'email' => 'required|email|max:255',
             'phone' => 'required|string|max:20',
+            'coupon_code' => 'nullable|string|max:30',
         ]);
 
         $items = $this->getCartItems($request->input('selected_ids', []));
@@ -58,8 +61,10 @@ class CartCheckoutController extends Controller
                 ->with('error', 'Pilih setidaknya satu item untuk checkout.');
         }
 
-        if (blank(config('midtrans.server_key'))) {
-            return back()->with('error', 'MIDTRANS_SERVER_KEY belum diset. Periksa .env Anda.');
+        $coupon = null;
+        if ($request->filled('coupon_code')) {
+            $coupon = Coupon::where('code', strtoupper(trim($request->coupon_code)))->first();
+            if (! $coupon) return back()->withInput()->with('error', 'Kode kupon tidak ditemukan.');
         }
 
         // Kunci kuota semua item sekaligus. Bila satu event kehabisan stok,
@@ -69,9 +74,26 @@ class CartCheckoutController extends Controller
                 lines: array_map(fn ($i) => ['event' => $i['event'], 'quantity' => $i['quantity']], $items),
                 customer: $request->only('name', 'email', 'phone'),
                 userId: Auth::id(),
+                coupon: $coupon,
             );
         } catch (RuntimeException $e) {
             return redirect()->route('cart.index')->with('error', $e->getMessage());
+        }
+
+        // Semua event gratis: stok langsung dipotong dan e-ticket diterbitkan,
+        // tanpa Snap/Midtrans dan tanpa biaya layanan.
+        if (collect($items)->every(fn ($item) => $item['event']->isFree())) {
+            $this->ticketing->fulfill($transaction);
+            $this->clearCart(collect($items)->pluck('event.id')->all());
+
+            return redirect()->route('ticket', $transaction->order_id)
+                ->with('success', 'Pendaftaran event gratis berhasil. E-ticket Anda sudah diterbitkan.');
+        }
+
+        if (blank(config('midtrans.server_key'))) {
+            $this->ticketing->release($transaction, Transaction::STATUS_FAILED);
+
+            return back()->with('error', 'MIDTRANS_SERVER_KEY belum diset. Periksa .env Anda.');
         }
 
         try {
@@ -104,12 +126,18 @@ class CartCheckoutController extends Controller
                 'name'     => mb_substr($item->title, 0, 50),
             ];
 
-            $itemDetails[] = [
-                'id'       => 'fee-' . $item->event_id,
-                'price'    => TicketingService::SERVICE_FEE,
-                'quantity' => 1,
-                'name'     => 'Biaya Layanan',
-            ];
+            if ($item->price > 0) {
+                $itemDetails[] = [
+                    'id'       => 'fee-' . $item->event_id,
+                    'price'    => TicketingService::SERVICE_FEE,
+                    'quantity' => 1,
+                    'name'     => 'Biaya Layanan',
+                ];
+            }
+        }
+
+        if ($transaction->discount_amount > 0) {
+            $itemDetails[] = ['id' => 'discount-' . $transaction->id, 'price' => -$transaction->discount_amount, 'quantity' => 1, 'name' => 'Diskon kupon'];
         }
 
         return Snap::getSnapToken([
@@ -183,8 +211,8 @@ class CartCheckoutController extends Controller
                 $items[] = [
                     'event'    => $cartItem->event,
                     'quantity' => max(1, (int) $cartItem->quantity),
-                    'price'    => $cartItem->event->price,
-                    'subTotal' => $cartItem->event->price * max(1, (int) $cartItem->quantity),
+                    'price'    => $cartItem->event->currentPrice(),
+                    'subTotal' => $cartItem->event->currentPrice() * max(1, (int) $cartItem->quantity),
                 ];
             }
         } else {
@@ -200,8 +228,8 @@ class CartCheckoutController extends Controller
                 $items[] = [
                     'event'    => $event,
                     'quantity' => $quantity,
-                    'price'    => $event->price,
-                    'subTotal' => $event->price * $quantity,
+                    'price'    => $event->currentPrice(),
+                    'subTotal' => $event->currentPrice() * $quantity,
                 ];
             }
         }

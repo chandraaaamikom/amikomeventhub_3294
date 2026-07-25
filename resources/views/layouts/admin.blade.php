@@ -66,6 +66,11 @@
                 </svg>
                 Kelola Kategori
             </a>
+            <a href="{{ route('admin.coupons.index') }}"
+                class="flex items-center gap-3 px-4 py-3 {{ request()->routeIs('admin.coupons.*') ? 'bg-indigo-800 text-white' : 'text-indigo-300 hover:bg-indigo-800 hover:text-white' }} rounded-xl font-bold transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.5 0 1 .2 1.4.6l7 7a2 2 0 010 2.8l-7 7a2 2 0 01-2.8 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"/></svg>
+                Kupon & Voucher
+            </a>
             <a href="{{ route('admin.transactions.index') }}"
                 class="flex items-center gap-3 px-4 py-3 hover:bg-indigo-800 rounded-xl font-bold transition">
                 <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

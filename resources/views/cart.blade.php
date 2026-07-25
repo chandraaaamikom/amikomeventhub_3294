@@ -51,7 +51,7 @@
                             </div>
 
                             <div class="grid gap-3 text-right">
-                                <span class="text-slate-500">Rp {{ number_format($item['event']->price, 0, ',', '.') }} / tiket</span>
+                                <span class="text-slate-500">Rp {{ number_format($item['event']->currentPrice(), 0, ',', '.') }} / tiket <span class="text-xs">({{ $item['event']->currentPriceLabel() }})</span></span>
                                 <span class="text-slate-900 font-bold">Subtotal: Rp {{ number_format($item['subTotal'], 0, ',', '.') }}</span>
                             </div>
                         </div>
@@ -106,7 +106,7 @@
                     </div>
                     <div class="flex justify-between">
                         <span>Biaya Layanan</span>
-                        <span>Rp {{ number_format(5000 * $items->count(), 0, ',', '.') }}</span>
+                        <span>Rp {{ number_format($items->sum('serviceFee'), 0, ',', '.') }}</span>
                     </div>
                     <div class="flex justify-between text-xl font-black text-slate-900 border-t border-slate-200 pt-4">
                         <span>Estimasi Total</span>

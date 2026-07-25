@@ -84,7 +84,8 @@
                             @if($event->isFree())
                                 Gratis
                             @else
-                                Rp {{ number_format($event->price, 0, ',', '.') }} <span class="text-lg font-medium text-indigo-200">/ orang</span>
+                                {{ $event->isFree() ? 'Gratis' : 'Rp ' . number_format($event->currentPrice(), 0, ',', '.') }} <span class="text-lg font-medium text-indigo-200">{{ $event->isFree() ? '' : '/ orang' }}</span>
+                                @if(! $event->isFree())<span class="block text-xs font-medium text-indigo-200">Harga {{ $event->currentPriceLabel() }}</span>@endif
                             @endif
                         </h2>
                         <p class="mt-4 text-slate-100 flex items-center gap-2">

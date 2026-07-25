@@ -105,7 +105,8 @@
             <div class="flex justify-between items-center pt-4 border-t">
 
                 <span class="text-2xl font-black text-indigo-600">
-                    Rp {{ number_format($event->price, 0, ',', '.') }}
+                    {{ $event->isFree() ? 'Gratis' : 'Rp ' . number_format($event->currentPrice(), 0, ',', '.') }}
+                    @if(! $event->isFree())<span class="block text-xs text-slate-400">{{ $event->currentPriceLabel() }}</span>@endif
                 </span>
 
                 <a href="{{ route('events.show', $event->id) }}"

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Event;
+use App\Models\Coupon;
 use App\Models\Ticket;
 use App\Models\Transaction;
 use App\Models\TransactionItem;
@@ -25,13 +26,13 @@ class TicketingService
      *
      * @throws RuntimeException bila stok tidak mencukupi
      */
-    public function reserve(array $lines, array $customer, ?int $userId = null): Transaction
+    public function reserve(array $lines, array $customer, ?int $userId = null, ?Coupon $coupon = null): Transaction
     {
         if (empty($lines)) {
             throw new RuntimeException('Tidak ada item untuk dipesan.');
         }
 
-        return DB::transaction(function () use ($lines, $customer, $userId) {
+        return DB::transaction(function () use ($lines, $customer, $userId, $coupon) {
             $totalPrice = 0;
             $totalQuantity = 0;
             $snapshots = [];
@@ -62,15 +63,18 @@ class TicketingService
                 // Kunci kuotanya. Stok fisik belum dipotong.
                 $event->increment('reserved_stock', $quantity);
 
-                $subTotal = (int) $event->price * $quantity;
-                $totalPrice += $subTotal + self::SERVICE_FEE;
+                $unitPrice = $event->currentPrice();
+                $subTotal = $unitPrice * $quantity;
+                // Event gratis diterbitkan tanpa biaya apa pun dan tidak boleh
+                // dipaksa masuk ke gateway pembayaran.
+                $totalPrice += $subTotal + ($event->isFree() ? 0 : self::SERVICE_FEE);
                 $totalQuantity += $quantity;
 
                 $snapshots[] = [
                     'event_id'        => $event->id,
                     'organization_id' => $event->organization_id,
                     'title'           => $event->title,
-                    'price'           => (int) $event->price,
+                    'price'           => $unitPrice,
                     'quantity'        => $quantity,
                     'sub_total'       => $subTotal,
                 ];
@@ -79,9 +83,23 @@ class TicketingService
             // Diisi hanya bila seluruh item berasal dari satu tenant.
             $orgIds = collect($snapshots)->pluck('organization_id')->filter()->unique();
 
+            $ticketAmount = collect($snapshots)->sum('sub_total');
+            $lockedCoupon = null;
+            $discount = 0;
+            if ($coupon) {
+                $lockedCoupon = Coupon::whereKey($coupon->id)->lockForUpdate()->first();
+                if (! $lockedCoupon || ! $lockedCoupon->isUsableFor($ticketAmount)) {
+                    throw new RuntimeException('Kode kupon tidak berlaku, belum aktif, atau kuotanya sudah habis.');
+                }
+                $discount = $lockedCoupon->discountFor($ticketAmount);
+                $lockedCoupon->increment('used_count'); // diundur kembali bila transaksi gagal/expired
+            }
+
             $transaction = Transaction::create([
                 'user_id'         => $userId,
                 'organization_id' => $orgIds->count() === 1 ? $orgIds->first() : null,
+                'coupon_id'       => $lockedCoupon?->id,
+                'coupon_code'     => $lockedCoupon?->code,
                 // Dipertahankan demi kompatibilitas view lama.
                 'event_id'        => $snapshots[0]['event_id'],
                 'order_id'        => $this->generateOrderId(),
@@ -89,7 +107,9 @@ class TicketingService
                 'customer_email'  => $customer['email'],
                 'customer_phone'  => $customer['phone'],
                 'quantity'        => $totalQuantity,
-                'total_price'     => $totalPrice,
+                'total_price'     => max(0, $totalPrice - $discount),
+                'discount_amount' => $discount,
+                'coupon_applied'  => $lockedCoupon !== null,
                 'status'          => Transaction::STATUS_PENDING,
                 'expires_at'      => now()->addMinutes(self::RESERVATION_MINUTES),
                 'stock_applied'   => false,
@@ -169,6 +189,10 @@ class TicketingService
                 }
 
                 $event->decrement('reserved_stock', min($item->quantity, $event->reserved_stock));
+            }
+
+            if ($transaction->coupon_applied && $transaction->coupon_id) {
+                Coupon::whereKey($transaction->coupon_id)->where('used_count', '>', 0)->decrement('used_count');
             }
 
             $transaction->forceFill([

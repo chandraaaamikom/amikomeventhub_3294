@@ -45,7 +45,7 @@
         <label class="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-wide">Harga Tiket (Rp)</label>
         <input type="number" name="price" min="0" step="1000" value="{{ old('price', $event->price ?? 0) }}" required
                class="w-full rounded-2xl border-2 border-slate-100 px-5 py-4 outline-none focus:border-indigo-600 font-medium">
-        <p class="mt-2 text-xs text-slate-400">Isi 0 untuk event gratis. Pembeli tetap dikenai biaya layanan platform Rp 5.000.</p>
+        <p class="mt-2 text-xs text-slate-400">Harga Regular. Isi 0 untuk event gratis tanpa biaya layanan.</p>
     </div>
 
     <div>
@@ -57,6 +57,29 @@
                 {{ $event->reserved_stock }} tiket sedang dalam proses checkout — stok tidak bisa diturunkan di bawah angka ini.
             </p>
         @endif
+    </div>
+
+    <div class="md:col-span-2 rounded-2xl border border-indigo-100 bg-indigo-50/50 p-5">
+        <h3 class="font-black text-indigo-900">Dynamic Pricing <span class="text-sm font-medium text-indigo-500">(opsional)</span></h3>
+        <p class="mt-1 text-sm text-slate-500">Sistem otomatis memakai Early Bird, lalu Presale, dan terakhir harga Regular sesuai waktu saat pembeli checkout.</p>
+        <div class="mt-5 grid gap-5 md:grid-cols-2">
+            <div>
+                <label class="block text-sm font-bold text-slate-700 mb-2">Harga Early Bird (Rp)</label>
+                <input type="number" name="early_bird_price" min="0" step="1000" value="{{ old('early_bird_price', $event->early_bird_price ?? '') }}" class="w-full rounded-2xl border-2 border-white px-5 py-4 outline-none focus:border-indigo-600">
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-slate-700 mb-2">Early Bird berakhir</label>
+                <input type="datetime-local" name="early_bird_ends_at" value="{{ old('early_bird_ends_at', isset($event) && $event->early_bird_ends_at ? $event->early_bird_ends_at->format('Y-m-d\\TH:i') : '') }}" class="w-full rounded-2xl border-2 border-white px-5 py-4 outline-none focus:border-indigo-600">
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-slate-700 mb-2">Harga Presale (Rp)</label>
+                <input type="number" name="presale_price" min="0" step="1000" value="{{ old('presale_price', $event->presale_price ?? '') }}" class="w-full rounded-2xl border-2 border-white px-5 py-4 outline-none focus:border-indigo-600">
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-slate-700 mb-2">Presale berakhir</label>
+                <input type="datetime-local" name="presale_ends_at" value="{{ old('presale_ends_at', isset($event) && $event->presale_ends_at ? $event->presale_ends_at->format('Y-m-d\\TH:i') : '') }}" class="w-full rounded-2xl border-2 border-white px-5 py-4 outline-none focus:border-indigo-600">
+            </div>
+        </div>
     </div>
 
     <div class="md:col-span-2">

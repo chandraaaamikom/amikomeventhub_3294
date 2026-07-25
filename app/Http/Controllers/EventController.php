@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\Event;
 use App\Models\Transaction;
+use App\Models\Coupon;
 use App\Services\TicketingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -67,10 +68,15 @@ class EventController extends Controller
             'email'    => 'required|email|max:255',
             'phone'    => 'required|string|max:20',
             'quantity' => 'required|integer|min:1',
+            'coupon_code' => 'nullable|string|max:30',
         ]);
 
-        if (blank(config('midtrans.server_key'))) {
-            return response()->json(['error' => 'MIDTRANS_SERVER_KEY belum diset. Periksa .env Anda.'], 500);
+        $coupon = null;
+        if ($request->filled('coupon_code')) {
+            $coupon = Coupon::where('code', strtoupper(trim($request->coupon_code)))->first();
+            if (! $coupon) {
+                return response()->json(['error' => 'Kode kupon tidak ditemukan.'], 422);
+            }
         }
 
         try {
@@ -78,9 +84,27 @@ class EventController extends Controller
                 lines: [['event' => $event, 'quantity' => (int) $request->quantity]],
                 customer: $request->only('name', 'email', 'phone'),
                 userId: Auth::id(),
+                coupon: $coupon,
             );
         } catch (RuntimeException $e) {
             return response()->json(['error' => $e->getMessage()], 422);
+        }
+
+        if ($event->isFree()) {
+            $this->ticketing->fulfill($transaction);
+
+            return response()->json([
+                'success'    => true,
+                'free'       => true,
+                'order_id'   => $transaction->order_id,
+                'ticket_url' => route('ticket', $transaction->order_id),
+            ]);
+        }
+
+        if (blank(config('midtrans.server_key'))) {
+            $this->ticketing->release($transaction, Transaction::STATUS_FAILED);
+
+            return response()->json(['error' => 'MIDTRANS_SERVER_KEY belum diset. Periksa .env Anda.'], 500);
         }
 
         try {
@@ -163,12 +187,18 @@ class EventController extends Controller
                 'name'     => mb_substr($item->title, 0, 50), // Midtrans membatasi 50 karakter
             ];
 
-            $itemDetails[] = [
-                'id'       => 'fee-' . $item->event_id,
-                'price'    => TicketingService::SERVICE_FEE,
-                'quantity' => 1,
-                'name'     => 'Biaya Layanan',
-            ];
+            if ($item->price > 0) {
+                $itemDetails[] = [
+                    'id'       => 'fee-' . $item->event_id,
+                    'price'    => TicketingService::SERVICE_FEE,
+                    'quantity' => 1,
+                    'name'     => 'Biaya Layanan',
+                ];
+            }
+        }
+
+        if ($transaction->discount_amount > 0) {
+            $itemDetails[] = ['id' => 'discount-' . $transaction->id, 'price' => -$transaction->discount_amount, 'quantity' => 1, 'name' => 'Diskon kupon'];
         }
 
         return Snap::getSnapToken([

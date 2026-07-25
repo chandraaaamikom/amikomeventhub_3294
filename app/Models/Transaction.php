@@ -17,6 +17,10 @@ class Transaction extends Model
     protected $fillable = [
         'user_id',
         'organization_id',
+        'coupon_id',
+        'coupon_code',
+        'discount_amount',
+        'coupon_applied',
         'event_id',
         'order_id',
         'customer_name',
@@ -39,6 +43,7 @@ class Transaction extends Model
         'expires_at' => 'datetime',
         'paid_at' => 'datetime',
         'stock_applied' => 'boolean',
+        'coupon_applied' => 'boolean',
         'total_price' => 'integer',
         'quantity' => 'integer',
     ];
@@ -66,6 +71,11 @@ class Transaction extends Model
     public function tickets()
     {
         return $this->hasMany(Ticket::class);
+    }
+
+    public function coupon()
+    {
+        return $this->belongsTo(Coupon::class);
     }
 
     public function isPaid(): bool

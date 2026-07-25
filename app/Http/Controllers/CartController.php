@@ -56,9 +56,9 @@ class CartController extends Controller
                 $items->push([
                     'event' => $item->event,
                     'quantity' => $quantity,
-                    'subTotal' => $item->event->price * $quantity,
-                    'serviceFee' => 5000,
-                    'total' => ($item->event->price * $quantity) + 5000,
+                    'subTotal' => $item->event->currentPrice() * $quantity,
+                    'serviceFee' => $item->event->isFree() ? 0 : 5000,
+                    'total' => ($item->event->currentPrice() * $quantity) + ($item->event->isFree() ? 0 : 5000),
                 ]);
             }
         } else {
@@ -72,9 +72,9 @@ class CartController extends Controller
                 $items->push([
                     'event' => $event,
                     'quantity' => $quantity,
-                    'subTotal' => $event->price * $quantity,
-                    'serviceFee' => 5000,
-                    'total' => ($event->price * $quantity) + 5000,
+                    'subTotal' => $event->currentPrice() * $quantity,
+                    'serviceFee' => $event->isFree() ? 0 : 5000,
+                    'total' => ($event->currentPrice() * $quantity) + ($event->isFree() ? 0 : 5000),
                 ]);
             }
         }

@@ -62,6 +62,50 @@
     </div>
 </div>
 
+{{-- Grafik ekosistem (Soal 2: Dashboard Admin Berbasis Grafik) --}}
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-10">
+    @php $maxUsers = max(collect($usersByMonth)->max('total'), 1); @endphp
+    <section class="bg-white rounded-3xl border border-slate-100 shadow-sm p-8">
+        <div class="mb-8">
+            <h3 class="font-black text-xl text-slate-800">Pertumbuhan Pengguna</h3>
+            <p class="text-sm text-slate-500 mt-1">Pengguna baru dalam 6 bulan terakhir.</p>
+        </div>
+        <div class="flex items-end justify-between gap-4 h-56">
+            @foreach($usersByMonth as $month)
+                <div class="flex-1 h-full flex flex-col items-center justify-end gap-3 group">
+                    <span class="text-xs font-bold text-slate-600 opacity-0 group-hover:opacity-100 transition">{{ $month['total'] }} user</span>
+                    <div class="w-full rounded-t-2xl bg-indigo-600 hover:bg-indigo-700 transition"
+                         style="height: {{ $month['total'] > 0 ? max(4, round($month['total'] / $maxUsers * 100)) : 2 }}%"></div>
+                    <span class="text-xs font-bold text-slate-400 uppercase">{{ $month['label'] }}</span>
+                </div>
+            @endforeach
+        </div>
+    </section>
+
+    @php $maxCategoryEvents = max(collect($eventsByCategory)->max('total'), 1); @endphp
+    <section class="bg-white rounded-3xl border border-slate-100 shadow-sm p-8">
+        <div class="mb-8">
+            <h3 class="font-black text-xl text-slate-800">Statistik Event per Kategori</h3>
+            <p class="text-sm text-slate-500 mt-1">Distribusi event yang tersedia di platform.</p>
+        </div>
+        <div class="space-y-5">
+            @forelse($eventsByCategory as $category)
+                <div>
+                    <div class="flex justify-between gap-4 text-sm mb-2">
+                        <span class="font-bold text-slate-700 truncate">{{ $category['label'] }}</span>
+                        <span class="font-black text-indigo-600">{{ $category['total'] }} event</span>
+                    </div>
+                    <div class="h-3 rounded-full bg-slate-100 overflow-hidden">
+                        <div class="h-full rounded-full bg-indigo-600" style="width: {{ round($category['total'] / $maxCategoryEvents * 100) }}%"></div>
+                    </div>
+                </div>
+            @empty
+                <p class="text-slate-500 text-center py-14">Belum ada event untuk ditampilkan.</p>
+            @endforelse
+        </div>
+    </section>
+</div>
+
 <div class="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
     <div class="p-8 border-b flex justify-between items-center">
         <h3 class="font-black text-xl text-slate-800">Transaksi Terakhir</h3>

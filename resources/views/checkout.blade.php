@@ -21,7 +21,7 @@
                 <div>
                     <h4 class="font-extrabold text-lg">{{ $event->title }}</h4>
                     <p class="text-slate-500">{{ \Carbon\Carbon::parse($event->date)->format('d M Y') }} • {{ $event->location }}</p>
-                    <p class="text-indigo-600 font-bold mt-2">Rp {{ number_format($event->price, 0, ',', '.') }} / orang</p>
+                    <p class="text-indigo-600 font-bold mt-2">{{ $event->isFree() ? 'Gratis' : 'Rp ' . number_format($event->currentPrice(), 0, ',', '.') . ' / orang' }} <span class="text-xs text-slate-400">{{ $event->currentPriceLabel() }}</span></p>
                 </div>
             </div>
             
@@ -39,13 +39,15 @@
                     <span>Harga Tiket</span>
                     <span>Rp {{ number_format($event->price, 0, ',', '.') }}</span>
                 </div>
-                <div class="flex justify-between text-slate-500">
-                    <span>Biaya Layanan</span>
-                    <span>Rp 5.000</span>
-                </div>
+                @if(! $event->isFree())
+                    <div class="flex justify-between text-slate-500">
+                        <span>Biaya Layanan</span>
+                        <span>Rp 5.000</span>
+                    </div>
+                @endif
                 <div class="flex justify-between text-2xl font-black mt-4 pt-4 border-t">
-                    <span>Total Bayar</span>
-                    <span id="totalPrice" class="text-indigo-600">Rp {{ number_format($event->price + 5000, 0, ',', '.') }}</span>
+                    <span>{{ $event->isFree() ? 'Total' : 'Total Bayar' }}</span>
+                    <span id="totalPrice" class="text-indigo-600">{{ $event->isFree() ? 'Gratis' : 'Rp ' . number_format($event->price + 5000, 0, ',', '.') }}</span>
                 </div>
             </div>
         </div>
@@ -67,6 +69,10 @@
                         <label class="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-wide">WhatsApp</label>
                         <input type="tel" name="phone" class="w-full px-5 py-4 bg-white border-2 border-slate-100 rounded-2xl outline-none focus:border-indigo-600 font-medium" required>
                     </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-wide">Kode Kupon <span class="normal-case text-slate-400">(opsional)</span></label>
+                    <input type="text" name="coupon_code" placeholder="MAHASISWA50" class="w-full px-5 py-4 bg-white border-2 border-slate-100 rounded-2xl outline-none focus:border-indigo-600 font-medium uppercase">
                 </div>
                 
                 <button type="button" onclick="submitCheckout(event)" class="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-xl shadow-xl hover:bg-indigo-700 transition-all">
@@ -91,7 +97,9 @@
     </div>
 </div>
 
-<script src="https://app.sandbox.midtrans.com/snap/snap.js"></script>
+@if(! $event->isFree())
+    <script src="https://app.sandbox.midtrans.com/snap/snap.js"></script>
+@endif
 
 <script>
     const eventId = {{ $event->id }};
@@ -117,11 +125,17 @@
                 name: formData.get('name'),
                 email: formData.get('email'),
                 phone: formData.get('phone'),
+                coupon_code: formData.get('coupon_code'),
                 quantity: quantity,
             })
         })
         .then(res => res.json())
         .then(data => {
+            if (data.success && data.free) {
+                window.location.href = data.ticket_url;
+                return;
+            }
+
             if (data.success) {
                 snapToken = data.snap_token;
                 openMidtransModal();
@@ -164,10 +178,11 @@
     // Fungsi update kalkulasi harga dinamis di client-side
     function updateTotalPrice() {
         const quantity = parseInt(document.getElementById('quantity').value, 10) || 1;
-        const ticketPrice = {{ $event->price }};
-        const total = ticketPrice * quantity + 5000;
+        const ticketPrice = {{ $event->currentPrice() }};
+        const isFree = {{ $event->isFree() ? 'true' : 'false' }};
+        const total = ticketPrice * quantity + (isFree ? 0 : 5000);
         
-        const formatted = 'Rp ' + new Intl.NumberFormat('id-ID').format(total);
+        const formatted = isFree ? 'Gratis' : 'Rp ' + new Intl.NumberFormat('id-ID').format(total);
         document.getElementById('totalPrice').textContent = formatted;
         document.getElementById('modalTotalBill').textContent = formatted;
     }

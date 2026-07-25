@@ -23,6 +23,7 @@ use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\PartnerController;
 use App\Http\Controllers\Admin\QrisController;
 use App\Http\Controllers\Admin\OrganizationController as AdminOrganizationController;
+use App\Http\Controllers\Admin\CouponController;
 
 // Import Controllers Panitia (Soal 1c — Multi-Tenant SaaS)
 use App\Http\Controllers\Organizer\CheckinController;
@@ -112,6 +113,7 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
         Route::resource('categories', CategoryController::class);
 
         Route::resource('partners', PartnerController::class);
+        Route::resource('coupons', CouponController::class)->except(['show']);
 
         // Kelola Organisasi / Tenant (Soal 1c — pengawas ekosistem)
         Route::get('/organizations', [AdminOrganizationController::class, 'index'])->name('organizations.index');
