@@ -6,6 +6,8 @@ kalau mau masuk ke admin pakai /admin/dashboard
 
 #link infinity
 
+https://amikomeventhub3294-production.up.railway.app/
+
 [amikomeventhub-3294.gt.tc](https://amikomeventhub-3294.gt.tc/)
 
 Tugas https://ungu.in/db-gemini
